@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AlgoVR Cyber Lab — Pembelajaran Algoritma & Pemrograman 3D/VR</title>
+    <!-- Tailwind CSS untuk tata letak HUD modern & responsif -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js r128 dari CDN stabil -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #030712;
+            color: #f8fafc;
+            user-select: none;
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Efek Glassmorphism Futuristic */
+        .glass-panel {
+            background: rgba(10, 15, 30, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 0 18px rgba(56, 189, 248, 0.08);
+        }
+        .glass-btn {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-btn:hover {
+            background: rgba(14, 165, 233, 0.25);
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+            transform: translateY(-1px);
+        }
+        .glass-btn.active {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.45), rgba(99, 102, 241, 0.45));
+            border-color: #7dd3fc;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.55);
+        }
+        /* Custom Scrollbar untuk panel materi */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.4); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.75); }
+
+        /* Reticle VR tengah layar saat mode VR aktif */
+        #vr-reticle {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            margin: -7px 0 0 -7px;
+            border: 2px solid #38bdf8;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 40;
+            box-shadow: 0 0 10px #38bdf8;
+            display: none;
+        }
+        /* Garis pemisah stereo VR */
+        #vr-divider {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: rgba(56, 189, 248, 0.4);
+            z-index: 35;
+            display: none;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Kontainer Utama Canvas 3D -->
+    <div id="canvas-container"></div>
+
+    <!-- Elemen Bantu VR Stereo -->
+    <div id="vr-reticle"></div>
+    <div id="vr-divider"></div>
+
+    <!-- Notifikasi Toast Pengganti Alert -->
+    <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300">
+        <div id="toast-content" class="glass-panel px-5 py-2.5 rounded-full text-sm font-semibold text-cyan-200 flex items-center gap-2 border-cyan-400/60">
+            <span id="toast-icon">⚡</span>
+            <span id="toast-text">Pesan sistem</span>
+        </div>
+    </div>
+
+    <!-- HUD ATAS: Header Cyber Lab & Kontrol Mode -->
+    <header class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <!-- Brand & Status -->
+        <div class="glass-panel px-4 py-2.5 rounded-2xl flex items-center gap-3 pointer-events-auto">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-sm sm:text-base font-extrabold tracking-wide bg-gradient-to-r from-cyan-300 via-sky-200 to-indigo-300 bg-clip-text text-transparent">
+                        ALGOVR CYBER LAB
+                    </h1>
+                    <span class="hidden sm:inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                        v2.6 XR
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-300/90 hidden sm:block">Laboratorium 3D Algoritma & Pemrograman</p>
+            </div>
+        </div>
+
+        <!-- Tombol Aksi Cepat (Audio, Panduan, VR Stereo / WebXR, Fullscreen) -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-audio" onclick="toggleAudio()" title="Suara Efek Sintetis" class="glass-btn px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-cyan-200">
+                <span id="audio-icon">🔊</span>
+                <span class="hidden md:inline">Audio</span>
+            </button>
+            <button id="btn-help" onclick="toggleHelpModal()" title="Panduan Navigasi" class="glass-btn px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-slate-200">
+                <span>🧭</span>
+                <span class="hidden md:inline">Navigasi</span>
+            </button>
+            <button id="btn-vr" onclick="toggleVRMode()" title="Mode VR Stereo / WebXR" class="glass-btn px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 text-emerald-300 border-emerald-400/40">
+                <span>🥽</span>
+                <span>Mode VR</span>
+            </button>
+            <button id="btn-fs" onclick="toggleFullscreen()" title="Layar Penuh" class="glass-btn px-3 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-slate-200">
+                <span>⛶</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- HUD BAWAH: Selector Stasiun Portal 3D -->
+    <nav class="fixed bottom-3 left-3 right-3 z-20 flex flex-col items-center gap-2 pointer-events-none">
+        <!-- D-Pad Virtual Khusus Mobile/Tablet untuk Berjalan di Ruang 3D -->
+        <div id="mobile-walk-pad" class="flex md:hidden items-center gap-2 pointer-events-auto mb-1">
+            <button onpointerdown="setMoveState('left', true)" onpointerup="setMoveState('left', false)" onpointerleave="setMoveState('left', false)" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold">◀</button>
+            <button onpointerdown="setMoveState('forward', true)" onpointerup="setMoveState('forward', false)" onpointerleave="setMoveState('forward', false)" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold">▲</button>
+            <button onpointerdown="setMoveState('backward', true)" onpointerup="setMoveState('backward', false)" onpointerleave="setMoveState('backward', false)" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold">▼</button>
+            <button onpointerdown="setMoveState('right', true)" onpointerup="setMoveState('right', false)" onpointerleave="setMoveState('right', false)" class="glass-btn w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold">▶</button>
+        </div>
+
+        <div class="glass-panel p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto max-w-full pointer-events-auto">
+            <button onclick="teleportToStation(0)" id="nav-0" class="glass-btn active px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5">
+                <span>🏛️</span> <span>Lobby Lab</span>
+            </button>
+            <button onclick="teleportToStation(1)" id="nav-1" class="glass-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5">
+                <span>📦</span> <span>1. Variabel</span>
+            </button>
+            <button onclick="teleportToStation(2)" id="nav-2" class="glass-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5">
+                <span>🔀</span> <span>2. Percabangan</span>
+            </button>
+            <button onclick="teleportToStation(3)" id="nav-3" class="glass-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5">
+                <span>🔁</span> <span>3. Perulangan</span>
+            </button>
+            <button onclick="teleportToStation(4)" id="nav-4" class="glass-btn px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5">
+                <span>📊</span> <span>4. Array & Sort</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- PANEL INTERAKTIF KANAN / BAWAH (KONTROL MODUL, KODE & KUIS) -->
+    <aside id="module-hud" class="fixed top-20 right-3 bottom-20 w-[calc(100%-1.5rem)] sm:w-96 z-20 flex flex-col pointer-events-none transition-transform duration-300">
+        <div class="glass-panel rounded-2xl flex flex-col max-h-full overflow-hidden pointer-events-auto">
+            <!-- Header Panel Modul -->
+            <div class="px-4 py-3 border-b border-cyan-500/25 flex items-center justify-between bg-slate-900/50">
+                <div>
+                    <span id="hud-badge" class="text-[10px] font-bold uppercase tracking-wider text-cyan-400">STASIUN UTAMA</span>
+                    <h2 id="hud-title" class="text-sm sm:text-base font-bold text-white">Selamat Datang di AlgoVR</h2>
+                </div>
+                <button onclick="toggleHudCollapse()" id="btn-collapse-hud" class="glass-btn px-2.5 py-1.5 rounded-lg text-xs text-cyan-200" title="Sembunyikan/Tampilkan Panel">
+                    <span id="collapse-icon">−</span>
+                </button>
+            </div>
+
+            <!-- Tab Navigasi Sub-Konten (Simulasi | Kode | Kuis) -->
+            <div id="hud-tabs" class="px-3 pt-2.5 flex gap-1.5 border-b border-slate-700/50 pb-2">
+                <button onclick="switchSubTab('sim')" id="tab-sim" class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/25 text-cyan-200 border border-cyan-400/40">🎛️ Simulasi 3D</button>
+                <button onclick="switchSubTab('code')" id="tab-code" class="flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/60">💻 Kode</button>
+                <button onclick="switchSubTab('quiz')" id="tab-quiz" class="flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/60">🧠 Kuis</button>
+            </div>
+
+            <!-- Area Konten Dinamis yang Dapat Di-scroll -->
+            <div id="hud-body" class="p-4 overflow-y-auto space-y-3 text-xs sm:text-sm leading-relaxed">
+                <!-- Konten akan diisi secara dinamis oleh JavaScript -->
+            </div>
+        </div>
+    </aside>
+
+    <!-- MODAL PANDUAN NAVIGASI -->
+    <div id="help-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="glass-panel max-w-md w-full rounded-2xl p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-cyan-500/30 pb-2.5">
+                <h3 class="text-base font-bold text-cyan-300">🧭 Panduan Kontrol Cyber Lab</h3>
+                <button onclick="toggleHelpModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <ul class="space-y-2.5 text-xs sm:text-sm text-slate-200">
+                <li class="flex items-start gap-2.5">
+                    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono-code text-xs">Drag / Sentuh</span>
+                    <span>Putar sudut pandang kamera 360° di sekitar ruangan laboratorium.</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono-code text-xs">Scroll / Pinch</span>
+                    <span>Perbesar (Zoom In) atau perkecil (Zoom Out) jarak kamera.</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono-code text-xs">W A S D / Panah</span>
+                    <span>Berjalan bebas menjelajahi lantai lab 3D (atau gunakan D-Pad di layar ponsel).</span>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono-code text-xs">🥽 Mode VR</span>
+                    <span>Mengaktifkan tampilan stereoscopic split-screen untuk Google Cardboard / Headset VR dan mendukung sensor giroskop ponsel.</span>
+                </li>
+            </ul>
+            <button onclick="toggleHelpModal()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 font-bold text-white text-xs sm:text-sm shadow-lg shadow-cyan-500/30">
+                Mengerti, Mulai Eksplorasi!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * ALGOVR CYBER LAB - ENGINE 3D & LOGIKA PEMBELAJARAN INTERAKTIF
+         * ============================================================================
+         */
+
+        // --- 1. SISTEM AUDIO SINTETIS (WEB AUDIO API - TANPA ASET EKSTERNAL) ---
+        let audioCtx = null;
+        let audioEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(freq = 520, type = 'sine', duration = 0.12, vol = 0.08) {
+            if (!audioEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) { /* Abaikan jika browser memblokir autoplay sebelum interaksi */ }
+        }
+
+        function playSoundClick() { playTone(620, 'triangle', 0.08, 0.07); }
+        function playSoundSuccess() {
+            playTone(523.25, 'sine', 0.12, 0.09);
+            setTimeout(() => playTone(659.25, 'sine', 0.12, 0.09), 90);
+            setTimeout(() => playTone(783.99, 'sine', 0.2, 0.1), 180);
+        }
+        function playSoundError() {
+            playTone(220, 'sawtooth', 0.18, 0.08);
+            setTimeout(() => playTone(180, 'sawtooth', 0.22, 0.08), 120);
+        }
+        function playSoundTeleport() {
+            playTone(300, 'sine', 0.25, 0.08);
+            setTimeout(() => playTone(580, 'sine', 0.25, 0.08), 100);
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            document.getElementById('audio-icon').textContent = audioEnabled ? '🔊' : '🔇';
+            showToast(audioEnabled ? 'Efek suara diaktifkan' : 'Efek suara dimatikan', audioEnabled ? '🔊' : '🔇');
+            if (audioEnabled) playSoundClick();
+        }
+
+        // --- 2. SISTEM NOTIFIKASI TOAST ---
+        let toastTimeout = null;
+        function showToast(msg, icon = '⚡') {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-text').textContent = msg;
+            document.getElementById('toast-icon').textContent = icon;
+            box.classList.remove('opacity-0', '-translate-y-2');
+            box.classList.add('opacity-100', 'translate-y-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                box.classList.remove('opacity-100', 'translate-y-0');
+                box.classList.add('opacity-0', '-translate-y-2');
+            }, 2600);
+        }
+
+        // --- 3. STATE GLOBAL APLIKASI & MODUL ---
+        let currentStation = 0;
+        let currentSubTab = 'sim';
+        let hudCollapsed = false;
+        let isVRMode = false;
+
+        // State Simulasi Modul 1: Variabel & Tipe Data
+        const varState = {
+            name: 'skorPemain',
+            type: 'int', // 'int' | 'str' | 'bool'
+            value: '100'
+        };
+
+        // State Simulasi Modul 2: Percabangan If-Else
+        const branchState = {
+            nilai: 82,
+            kkm: 75
+        };
+
+        // State Simulasi Modul 3: Perulangan (Looping)
+        const loopState = {
+            type: 'for', // 'for' | 'while'
+            count: 5,
+            running: false,
+            currentIter: 0,
+            timer: null
+        };
+
+        // State Simulasi Modul 4: Array & Sorting
+        const sortState = {
+            algo: 'bubble', // 'bubble' | 'selection'
+            array: [45, 20, 75, 30, 60, 15],
+            i: 0,
+            j: 0,
+            minIdx: 0,
+            comparing: [],
+            sortedIndices: [],
+            isSorting: false,
+            isDone: false,
+            interval: null
+        };
+
+        // Skor Kuis per Modul
+        const quizAnswers = {};
+
+        // --- 4. INISIALISASI SCENE THREE.JS ---
+        let scene, camera, renderer;
+        let particlesMesh;
+        const clock = new THREE.Clock();
+
+        // Kontrol Kamera (Orbit + WASD Walk + Gyroscope VR)
+        const camControl = {
+            pos: new THREE.Vector3(0, 2.4, 9),
+            targetPos: new THREE.Vector3(0, 2.4, 9),
+            yaw: 0,
+            pitch: -0.05,
+            targetYaw: 0,
+            targetPitch: -0.05,
+            isDragging: false,
+            prevMouse: { x: 0, y: 0 },
+            move: { forward: false, backward: false, left: false, right: false }
+        };
+
+        // Koordinat 5 Stasiun di Dalam Ruang Cyber Lab
+        const STATIONS = [
+            { id: 0, name: 'Lobby Cyber Lab', pos: new THREE.Vector3(0, 2.4, 9), yaw: 0, pitch: -0.05 },
+            { id: 1, name: 'Stasiun 1: Variabel', pos: new THREE.Vector3(-9.5, 2.3, -2.5), yaw: Math.PI / 2.3, pitch: -0.06 },
+            { id: 2, name: 'Stasiun 2: Percabangan', pos: new THREE.Vector3(9.5, 2.3, -2.5), yaw: -Math.PI / 2.3, pitch: -0.06 },
+            { id: 3, name: 'Stasiun 3: Perulangan', pos: new THREE.Vector3(-8.5, 2.3, -12.5), yaw: Math.PI / 4, pitch: -0.08 },
+            { id: 4, name: 'Stasiun 4: Array & Sort', pos: new THREE.Vector3(8.5, 2.3, -12.5), yaw: -Math.PI / 4, pitch: -0.08 }
+        ];
+
+        // Objek 3D Dinamis untuk Setiap Modul
+        const objects3D = {
+            lobbyHolo: null,
+            varBox: null,
+            varInnerCore: null,
+            varSprite: null,
+            branchGateLeft: null,
+            branchGateRight: null,
+            branchOrb: null,
+            branchSprite: null,
+            loopTrackBlocks: [],
+            loopRunner: null,
+            loopSprite: null,
+            sortPillars: [],
+            sortLabels: [],
+            portals: []
+        };
+
+        // Helper Membuat Tekstur Kanvas untuk Label 3D Tajam
+        function createTextTexture(lines, options = {}) {
+            const canvas = document.createElement('canvas');
+            canvas.width = options.width || 512;
+            canvas.height = options.height || 256;
+            const ctx = canvas.getContext('2d');
+
+            // Background kartu hologram
+            ctx.fillStyle = options.bg || 'rgba(10, 18, 36, 0.88)';
+            ctx.beginPath();
+            ctx.roundRect(12, 12, canvas.width - 24, canvas.height - 24, 24);
+            ctx.fill();
+
+            // Border neon
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = options.border || '#38bdf8';
+            ctx.stroke();
+
+            // Teks baris demi baris
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const totalLines = lines.length;
+            lines.forEach((line, idx) => {
+                ctx.font = line.font || 'bold 34px "JetBrains Mono", monospace';
+                ctx.fillStyle = line.color || '#f8fafc';
+                const y = (canvas.height / (totalLines + 1)) * (idx + 1);
+                ctx.fillText(line.text, canvas.width / 2, y);
+            });
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        function createLabelSprite(lines, scaleX = 3.2, scaleY = 1.6, options = {}) {
+            const tex = createTextTexture(lines, options);
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(scaleX, scaleY, 1);
+            return sprite;
+        }
+
+        function initThreeScene() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x030712);
+            scene.fog = new THREE.FogExp2(0x030712, 0.024);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 120);
+            camera.position.copy(camControl.pos);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // Pencahayaan Dinamis Cyber Lab
+            const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.45);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            const pointLight1 = new THREE.PointLight(0x0ea5e9, 1.5, 25);
+            pointLight1.position.set(-10, 5, -5);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0x818cf8, 1.5, 25);
+            pointLight2.position.set(10, 5, -5);
+            scene.add(pointLight2);
+
+            buildEnvironment();
+            buildLobbyCenterpiece();
+            buildStation1_Variables();
+            buildStation2_Branching();
+            buildStation3_Looping();
+            buildStation4_Sorting();
+
+            setupControls();
+            updateHudContent();
+        }
+
+        // Membangun Ruang Laboratorium Cyber 3D
+        function buildEnvironment() {
+            // Lantai reflektif gelap + Grid Neon
+            const floorGeo = new THREE.PlaneGeometry(60, 60);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x060d1f,
+                roughness: 0.35,
+                metalness: 0.7
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+
+            const gridHelper = new THREE.GridHelper(60, 60, 0x0ea5e9, 0x1e293b);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            // Cincin Langit-Langit Futuristik
+            const ceilingRingGeo = new THREE.TorusGeometry(16, 0.15, 16, 100);
+            const ceilingRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            const ceilingRing = new THREE.Mesh(ceilingRingGeo, ceilingRingMat);
+            ceilingRing.rotation.x = Math.PI / 2;
+            ceilingRing.position.set(0, 10, -6);
+            scene.add(ceilingRing);
+
+            // Pilar-pilar Dinding Perimeter Cyber Lab
+            const pillarGeo = new THREE.CylinderGeometry(0.35, 0.35, 10, 8);
+            const pillarMat = new THREE.MeshStandardMaterial({
+                color: 0x0f172a,
+                emissive: 0x0284c7,
+                emissiveIntensity: 0.25,
+                metalness: 0.8
+            });
+
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 6) {
+                const px = Math.cos(angle) * 22;
+                const pz = Math.sin(angle) * 22 - 6;
+                const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+                pillar.position.set(px, 5, pz);
+                scene.add(pillar);
+            }
+
+            // Partikel Data Mengambang
+            const particleCount = 450;
+            const pGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 45;
+                positions[i + 1] = Math.random() * 12;
+                positions[i + 2] = (Math.random() - 0.5) * 45 - 5;
+            }
+            pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const pMat = new THREE.PointsMaterial({
+                color: 0x38bdf8,
+                size: 0.14,
+                transparent: true,
+                opacity: 0.75
+            });
+            particlesMesh = new THREE.Points(pGeo, pMat);
+            scene.add(particlesMesh);
+        }
+
+        // Monumen Tengah Lobby
+        function buildLobbyCenterpiece() {
+            const group = new THREE.Group();
+            group.position.set(0, 1.8, 1);
+
+            const icoGeo = new THREE.IcosahedronGeometry(1.1, 1);
+            const icoMat = new THREE.MeshStandardMaterial({
+                color: 0x0ea5e9,
+                wireframe: true,
+                emissive: 0x38bdf8,
+                emissiveIntensity: 0.8
+            });
+            const ico = new THREE.Mesh(icoGeo, icoMat);
+            group.add(ico);
+
+            const coreGeo = new THREE.OctahedronGeometry(0.55, 0);
+            const coreMat = new THREE.MeshStandardMaterial({
+                color: 0x818cf8,
+                emissive: 0x6366f1,
+                emissiveIntensity: 0.9
+            });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            group.add(core);
+
+            const label = createLabelSprite([
+                { text: 'ALGOVR CYBER LAB', font: 'bold 34px Inter, sans-serif', color: '#38bdf8' },
+                { text: 'Pilih Portal Stasiun Materi', font: '24px Inter, sans-serif', color: '#cbd5e1' }
+            ], 3.4, 1.5);
+            label.position.set(0, 2.0, 0);
+            group.add(label);
+
+            objects3D.lobbyHolo = { group, ico, core };
+            scene.add(group);
+        }
+
+        // --- STASIUN 1: VARIABEL & TIPE DATA ---
+        function buildStation1_Variables() {
+            const group = new THREE.Group();
+            group.position.set(-14.5, 0, -3.5);
+
+            // Pedestal Lantai
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.4, 2.7, 0.25, 32),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x0284c7, emissiveIntensity: 0.3 })
+            );
+            base.position.y = 0.125;
+            group.add(base);
+
+            // Kotak Memori 3D Transparan (Container Variabel)
+            const boxGeo = new THREE.BoxGeometry(2.4, 2.4, 2.4);
+            const boxMat = new THREE.MeshPhysicalMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.28,
+                roughness: 0.1,
+                metalness: 0.2
+            });
+            const varBox = new THREE.Mesh(boxGeo, boxMat);
+            varBox.position.y = 2.0;
+
+            // Wireframe tepi kotak memori
+            const edges = new THREE.EdgesGeometry(boxGeo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x38bdf8 }));
+            varBox.add(line);
+            group.add(varBox);
+
+            // Inti Data di dalam Kotak Memori
+            const coreGeo = new THREE.OctahedronGeometry(0.75, 0);
+            const coreMat = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                emissive: 0x0ea5e9,
+                emissiveIntensity: 0.8
+            });
+            const varInnerCore = new THREE.Mesh(coreGeo, coreMat);
+            varInnerCore.position.y = 2.0;
+            group.add(varInnerCore);
+
+            // Label Hologram Variabel
+            const sprite = createLabelSprite([
+                { text: 'int skorPemain = 100', font: 'bold 30px "JetBrains Mono"', color: '#38bdf8' },
+                { text: 'Tipe: Integer (Bilangan Bulat)', font: '22px Inter', color: '#e2e8f0' }
+            ], 3.8, 1.7);
+            sprite.position.set(0, 4.1, 0);
+            group.add(sprite);
+
+            objects3D.varBox = varBox;
+            objects3D.varInnerCore = varInnerCore;
+            objects3D.varSprite = sprite;
+            scene.add(group);
+        }
+
+        function updateStation1Visual() {
+            if (!objects3D.varInnerCore) return;
+            let colorHex = 0x38bdf8;
+            let typeLabel = 'Integer (Bilangan Bulat)';
+            let formattedVal = varState.value;
+
+            if (varState.type === 'int') {
+                colorHex = 0x38bdf8; // Biru Cyan
+                typeLabel = 'Integer (4 Byte)';
+                objects3D.varInnerCore.geometry.dispose();
+                objects3D.varInnerCore.geometry = new THREE.OctahedronGeometry(0.8, 0);
+            } else if (varState.type === 'str') {
+                colorHex = 0xf59e0b; // Amber / Oranye
+                typeLabel = 'String (Teks Karakter)';
+                formattedVal = `"${varState.value}"`;
+                objects3D.varInnerCore.geometry.dispose();
+                objects3D.varInnerCore.geometry = new THREE.BoxGeometry(1.1, 1.1, 1.1);
+            } else if (varState.type === 'bool') {
+                const isTrue = varState.value === 'true';
+                colorHex = isTrue ? 0x10b981 : 0xef4444;
+                typeLabel = 'Boolean (Logika 1 Bit)';
+                objects3D.varInnerCore.geometry.dispose();
+                objects3D.varInnerCore.geometry = new THREE.SphereGeometry(0.8, 24, 24);
+            }
+
+            objects3D.varInnerCore.material.color.setHex(colorHex);
+            objects3D.varInnerCore.material.emissive.setHex(colorHex);
+            objects3D.varBox.material.color.setHex(colorHex);
+
+            const hexStr = '#' + colorHex.toString(16).padStart(6, '0');
+            objects3D.varSprite.material.map.dispose();
+            objects3D.varSprite.material.map = createTextTexture([
+                { text: `${varState.type} ${varState.name} = ${formattedVal}`, font: 'bold 28px "JetBrains Mono"', color: hexStr },
+                { text: `Memori: ${typeLabel}`, font: '22px Inter', color: '#f8fafc' }
+            ], { border: hexStr });
+        }
+
+        // --- STASIUN 2: PERCABANGAN (IF - ELSE) ---
+        function buildStation2_Branching() {
+            const group = new THREE.Group();
+            group.position.set(14.5, 0, -3.5);
+
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.6, 2.9, 0.25, 32),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x6366f1, emissiveIntensity: 0.3 })
+            );
+            base.position.y = 0.125;
+            group.add(base);
+
+            // Gerbang Kiri (Jalur IF / TRUE - Hijau)
+            const gateLeft = new THREE.Mesh(
+                new THREE.TorusGeometry(1.05, 0.14, 16, 32),
+                new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.8 })
+            );
+            gateLeft.position.set(-1.35, 1.8, -0.5);
+            gateLeft.rotation.y = Math.PI / 2;
+            group.add(gateLeft);
+
+            // Gerbang Kanan (Jalur ELSE / FALSE - Merah)
+            const gateRight = new THREE.Mesh(
+                new THREE.TorusGeometry(1.05, 0.14, 16, 32),
+                new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 0.25 })
+            );
+            gateRight.position.set(-1.35, 1.8, 1.8);
+            gateRight.rotation.y = Math.PI / 2;
+            group.add(gateRight);
+
+            // Bola Keputusan Logika yang Bergerak ke Gerbang Aktif
+            const orb = new THREE.Mesh(
+                new THREE.SphereGeometry(0.45, 24, 24),
+                new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.9 })
+            );
+            orb.position.set(0.8, 1.8, -0.5);
+            group.add(orb);
+
+            const sprite = createLabelSprite([
+                { text: 'IF (nilai >= 75) -> TRUE', font: 'bold 28px "JetBrains Mono"', color: '#34d399' },
+                { text: 'Output: LULUS UJIAN', font: '24px Inter', color: '#f8fafc' }
+            ], 3.8, 1.7);
+            sprite.position.set(-0.4, 3.8, 0.6);
+            group.add(sprite);
+
+            objects3D.branchGateLeft = gateLeft;
+            objects3D.branchGateRight = gateRight;
+            objects3D.branchOrb = orb;
+            objects3D.branchSprite = sprite;
+            scene.add(group);
+        }
+
+        function updateStation2Visual() {
+            const passed = branchState.nilai >= branchState.kkm;
+            if (!objects3D.branchOrb) return;
+
+            if (passed) {
+                objects3D.branchGateLeft.material.emissiveIntensity = 1.0;
+                objects3D.branchGateRight.material.emissiveIntensity = 0.15;
+                objects3D.branchOrb.material.color.setHex(0x10b981);
+                objects3D.branchOrb.material.emissive.setHex(0x10b981);
+                objects3D.branchOrb.userData.targetZ = -0.5;
+            } else {
+                objects3D.branchGateLeft.material.emissiveIntensity = 0.15;
+                objects3D.branchGateRight.material.emissiveIntensity = 1.0;
+                objects3D.branchOrb.material.color.setHex(0xef4444);
+                objects3D.branchOrb.material.emissive.setHex(0xef4444);
+                objects3D.branchOrb.userData.targetZ = 1.8;
+            }
+
+            const statusText = passed ? 'Jalur IF (TRUE): LULUS' : 'Jalur ELSE (FALSE): REMEDIAL';
+            const borderCol = passed ? '#10b981' : '#ef4444';
+            objects3D.branchSprite.material.map.dispose();
+            objects3D.branchSprite.material.map = createTextTexture([
+                { text: `nilai (${branchState.nilai}) >= ${branchState.kkm} ? ${passed ? 'TRUE' : 'FALSE'}`, font: 'bold 26px "JetBrains Mono"', color: borderCol },
+                { text: statusText, font: '22px Inter', color: '#f8fafc' }
+            ], { border: borderCol });
+        }
+
+        // --- STASIUN 3: PERULANGAN (LOOPING FOR / WHILE) ---
+        function buildStation3_Looping() {
+            const group = new THREE.Group();
+            group.position.set(-12.5, 0, -16.5);
+
+            // Cincin Lintasan Konveyor Loop
+            const track = new THREE.Mesh(
+                new THREE.TorusGeometry(2.5, 0.12, 16, 64),
+                new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.6 })
+            );
+            track.rotation.x = Math.PI / 2;
+            track.position.y = 0.35;
+            group.add(track);
+
+            // Runner Energi yang Berputar
+            const runner = new THREE.Mesh(
+                new THREE.SphereGeometry(0.38, 20, 20),
+                new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xf59e0b, emissiveIntensity: 1.0 })
+            );
+            runner.position.set(2.5, 0.7, 0);
+            group.add(runner);
+
+            const sprite = createLabelSprite([
+                { text: 'FOR i = 1 TO 5', font: 'bold 30px "JetBrains Mono"', color: '#fbbf24' },
+                { text: 'Siap mengeksekusi 5 iterasi', font: '22px Inter', color: '#f8fafc' }
+            ], 3.8, 1.7);
+            sprite.position.set(0, 3.6, 0);
+            group.add(sprite);
+
+            objects3D.loopGroup = group;
+            objects3D.loopRunner = runner;
+            objects3D.loopSprite = sprite;
+            scene.add(group);
+            rebuildLoopBlocks();
+        }
+
+        function rebuildLoopBlocks() {
+            if (!objects3D.loopGroup) return;
+            objects3D.loopTrackBlocks.forEach(b => objects3D.loopGroup.remove(b));
+            objects3D.loopTrackBlocks = [];
+
+            const n = loopState.count;
+            for (let i = 0; i < n; i++) {
+                const angle = (i / n) * Math.PI * 2;
+                const block = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.45, 0.65, 0.45),
+                    new THREE.MeshStandardMaterial({
+                        color: 0x1e293b,
+                        emissive: 0x0ea5e9,
+                        emissiveIntensity: 0.25
+                    })
+                );
+                block.position.set(Math.cos(angle) * 2.5, 0.7, Math.sin(angle) * 2.5);
+                block.lookAt(0, 0.7, 0);
+                objects3D.loopGroup.add(block);
+                objects3D.loopTrackBlocks.push(block);
+            }
+
+            objects3D.loopSprite.material.map.dispose();
+            objects3D.loopSprite.material.map = createTextTexture([
+                { text: `${loopState.type.toUpperCase()} Loop (${n} Iterasi)`, font: 'bold 28px "JetBrains Mono"', color: '#fbbf24' },
+                { text: `Iterasi aktif: ${loopState.currentIter} / ${n}`, font: '22px Inter', color: '#f8fafc' }
+            ], { border: '#fbbf24' });
+        }
+
+        function runLoopSimulation() {
+            if (loopState.running) return;
+            loopState.running = true;
+            loopState.currentIter = 0;
+            rebuildLoopBlocks();
+            playSoundClick();
+
+            loopState.timer = setInterval(() => {
+                if (loopState.currentIter >= loopState.count) {
+                    clearInterval(loopState.timer);
+                    loopState.running = false;
+                    playSoundSuccess();
+                    showToast(`Perulangan selesai (${loopState.count}x eksekusi)!`, '🔁');
+                    updateHudContent();
+                    return;
+                }
+
+                const idx = loopState.currentIter;
+                const block = objects3D.loopTrackBlocks[idx];
+                if (block) {
+                    block.material.color.setHex(0x10b981);
+                    block.material.emissive.setHex(0x10b981);
+                    block.material.emissiveIntensity = 0.9;
+                    block.scale.set(1.25, 1.45, 1.25);
+
+                    const angle = (idx / loopState.count) * Math.PI * 2;
+                    objects3D.loopRunner.position.set(Math.cos(angle) * 2.5, 1.4, Math.sin(angle) * 2.5);
+                }
+
+                loopState.currentIter++;
+                playTone(380 + idx * 55, 'sine', 0.1, 0.08);
+
+                objects3D.loopSprite.material.map.dispose();
+                objects3D.loopSprite.material.map = createTextTexture([
+                    { text: `Iterasi ke-${loopState.currentIter} dari ${loopState.count}`, font: 'bold 28px "JetBrains Mono"', color: '#34d399' },
+                    { text: `Kondisi (i <= ${loopState.count}) : TRUE`, font: '22px Inter', color: '#f8fafc' }
+                ], { border: '#10b981' });
+
+                const statusEl = document.getElementById('loop-live-status');
+                if (statusEl) statusEl.textContent = `Mengeksekusi blok iterasi ke-${loopState.currentIter}...`;
+            }, 520);
+        }
+
+        // --- STASIUN 4: ARRAY & SORTING ---
+        function buildStation4_Sorting() {
+            const group = new THREE.Group();
+            group.position.set(12.5, 0, -16.5);
+
+            const base = new THREE.Mesh(
+                new THREE.BoxGeometry(6.8, 0.25, 2.8),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x38bdf8, emissiveIntensity: 0.25 })
+            );
+            base.position.y = 0.125;
+            group.add(base);
+
+            objects3D.sortGroup = group;
+            scene.add(group);
+            rebuildSortPillars();
+        }
+
+        function rebuildSortPillars() {
+            if (!objects3D.sortGroup) return;
+            objects3D.sortPillars.forEach(p => objects3D.sortGroup.remove(p));
+            objects3D.sortLabels.forEach(l => objects3D.sortGroup.remove(l));
+            objects3D.sortPillars = [];
+            objects3D.sortLabels = [];
+
+            const arr = sortState.array;
+            const spacing = 0.95;
+            const startX = -((arr.length - 1) * spacing) / 2;
+
+            arr.forEach((val, idx) => {
+                const height = (val / 100) * 3.2 + 0.4;
+                let color = 0x38bdf8;
+                if (sortState.sortedIndices.includes(idx)) color = 0x10b981;
+                else if (sortState.comparing.includes(idx)) color = 0xf59e0b;
+
+                const pillar = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.65, height, 0.65),
+                    new THREE.MeshStandardMaterial({
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: 0.45,
+                        roughness: 0.25
+                    })
+                );
+                const xPos = startX + idx * spacing;
+                pillar.position.set(xPos, height / 2 + 0.25, 0);
+                objects3D.sortGroup.add(pillar);
+                objects3D.sortPillars.push(pillar);
+
+                const lbl = createLabelSprite([
+                    { text: `${val}`, font: 'bold 56px "JetBrains Mono"', color: '#ffffff' },
+                    { text: `[${idx}]`, font: '32px "JetBrains Mono"', color: '#94a3b8' }
+                ], 0.9, 0.7, { width: 180, height: 140, bg: 'rgba(15,23,42,0.85)' });
+                lbl.position.set(xPos, height + 0.85, 0);
+                objects3D.sortGroup.add(lbl);
+                objects3D.sortLabels.push(lbl);
+            });
+        }
+
+        function stepSortAlgorithm() {
+            const arr = sortState.array;
+            const n = arr.length;
+
+            if (sortState.isDone) {
+                showToast('Array sudah terurut sempurna!', '✅');
+                return;
+            }
+
+            if (sortState.algo === 'bubble') {
+                if (sortState.i < n - 1) {
+                    if (sortState.j < n - sortState.i - 1) {
+                        const j = sortState.j;
+                        sortState.comparing = [j, j + 1];
+                        if (arr[j] > arr[j + 1]) {
+                            [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                            playTone(320 + arr[j] * 4, 'triangle', 0.09, 0.07);
+                        } else {
+                            playTone(260, 'sine', 0.06, 0.04);
+                        }
+                        sortState.j++;
+                    } else {
+                        sortState.sortedIndices.push(n - sortState.i - 1);
+                        sortState.j = 0;
+                        sortState.i++;
+                    }
+                } else {
+                    sortState.sortedIndices = arr.map((_, idx) => idx);
+                    sortState.comparing = [];
+                    sortState.isDone = true;
+                    stopAutoSort();
+                    playSoundSuccess();
+                    showToast('Bubble Sort selesai!', '🎉');
+                }
+            } else {
+                // Selection Sort
+                if (sortState.i < n - 1) {
+                    if (sortState.j === 0) {
+                        sortState.minIdx = sortState.i;
+                        sortState.j = sortState.i + 1;
+                    }
+                    if (sortState.j < n) {
+                        sortState.comparing = [sortState.minIdx, sortState.j];
+                        if (arr[sortState.j] < arr[sortState.minIdx]) {
+                            sortState.minIdx = sortState.j;
+                        }
+                        playTone(300 + sortState.j * 45, 'sine', 0.07, 0.06);
+                        sortState.j++;
+                    } else {
+                        [arr[sortState.i], arr[sortState.minIdx]] = [arr[sortState.minIdx], arr[sortState.i]];
+                        sortState.sortedIndices.push(sortState.i);
+                        sortState.i++;
+                        sortState.j = 0;
+                    }
+                } else {
+                    sortState.sortedIndices = arr.map((_, idx) => idx);
+                    sortState.comparing = [];
+                    sortState.isDone = true;
+                    stopAutoSort();
+                    playSoundSuccess();
+                    showToast('Selection Sort selesai!', '🎉');
+                }
+            }
+
+            rebuildSortPillars();
+            const arrayPreview = document.getElementById('sort-array-text');
+            if (arrayPreview) arrayPreview.textContent = `[ ${sortState.array.join(', ')} ]`;
+        }
+
+        function toggleAutoSort() {
+            if (sortState.isSorting) {
+                stopAutoSort();
+            } else {
+                if (sortState.isDone) resetSortArray(false);
+                sortState.isSorting = true;
+                playSoundClick();
+                sortState.interval = setInterval(stepSortAlgorithm, 380);
+                updateHudContent();
+            }
+        }
+
+        function stopAutoSort() {
+            sortState.isSorting = false;
+            clearInterval(sortState.interval);
+            updateHudContent();
+        }
+
+        function resetSortArray(randomize = true) {
+            stopAutoSort();
+            if (randomize) {
+                sortState.array = Array.from({ length: 6 }, () => Math.floor(Math.random() * 80) + 15);
+            } else {
+                sortState.array = [45, 20, 75, 30, 60, 15];
+            }
+            sortState.i = 0;
+            sortState.j = 0;
+            sortState.minIdx = 0;
+            sortState.comparing = [];
+            sortState.sortedIndices = [];
+            sortState.isDone = false;
+            rebuildSortPillars();
+            playSoundClick();
+            updateHudContent();
+        }
+
+        // --- 5. NAVIGASI TELEPORTASI & KONTROL KAMERA ---
+        function teleportToStation(idx) {
+            currentStation = idx;
+            const st = STATIONS[idx];
+            camControl.targetPos.copy(st.pos);
+            camControl.targetYaw = st.yaw;
+            camControl.targetPitch = st.pitch;
+
+            // Update tombol navigasi aktif
+            for (let i = 0; i <= 4; i++) {
+                const btn = document.getElementById(`nav-${i}`);
+                if (btn) {
+                    if (i === idx) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            }
+
+            playSoundTeleport();
+            showToast(`Berpindah ke ${st.name}`, '🚀');
+            updateHudContent();
+        }
+
+        function setMoveState(dir, active) {
+            camControl.move[dir] = active;
+        }
+
+        function setupControls() {
+            const dom = renderer.domElement;
+
+            // Mouse / Pointer Drag untuk melihat sekeliling 360 derajat
+            dom.addEventListener('pointerdown', (e) => {
+                camControl.isDragging = true;
+                camControl.prevMouse = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('pointermove', (e) => {
+                if (!camControl.isDragging) return;
+                const dx = e.clientX - camControl.prevMouse.x;
+                const dy = e.clientY - camControl.prevMouse.y;
+                camControl.prevMouse = { x: e.clientX, y: e.clientY };
+
+                camControl.targetYaw -= dx * 0.0045;
+                camControl.targetPitch = Math.max(-1.1, Math.min(1.1, camControl.targetPitch - dy * 0.0045));
+            });
+
+            window.addEventListener('pointerup', () => {
+                camControl.isDragging = false;
+            });
+
+            // Scroll Wheel untuk maju/mundur kamera
+            dom.addEventListener('wheel', (e) => {
+                const forward = new THREE.Vector3(-Math.sin(camControl.yaw), 0, -Math.cos(camControl.yaw));
+                camControl.targetPos.addScaledVector(forward, -e.deltaY * 0.004);
+            }, { passive: true });
+
+            // Keyboard WASD / Panah untuk berjalan
+            window.addEventListener('keydown', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+                const k = e.key.toLowerCase();
+                if (k === 'w' || e.key === 'ArrowUp') camControl.move.forward = true;
+                if (k === 's' || e.key === 'ArrowDown') camControl.move.backward = true;
+                if (k === 'a' || e.key === 'ArrowLeft') camControl.move.left = true;
+                if (k === 'd' || e.key === 'ArrowRight') camControl.move.right = true;
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const k = e.key.toLowerCase();
+                if (k === 'w' || e.key === 'ArrowUp') camControl.move.forward = false;
+                if (k === 's' || e.key === 'ArrowDown') camControl.move.backward = false;
+                if (k === 'a' || e.key === 'ArrowLeft') camControl.move.left = false;
+                if (k === 'd' || e.key === 'ArrowRight') camControl.move.right = false;
+            });
+
+            // Sensor Giroskop untuk Headset VR Mobile
+            window.addEventListener('deviceorientation', (e) => {
+                if (!isVRMode || e.alpha === null) return;
+                const betaRad = THREE.MathUtils.degToRad(e.beta || 0);
+                camControl.targetPitch = THREE.MathUtils.clamp((betaRad - Math.PI / 2) * 0.8, -1.0, 1.0);
+            });
+
+            // Resize Responsif
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // --- 6. MODE VR STEREO & FULLSCREEN ---
+        function toggleVRMode() {
+            isVRMode = !isVRMode;
+            const btn = document.getElementById('btn-vr');
+            const reticle = document.getElementById('vr-reticle');
+            const divider = document.getElementById('vr-divider');
+
+            if (isVRMode) {
+                btn.classList.add('active');
+                reticle.style.display = 'block';
+                divider.style.display = 'block';
+                showToast('Mode VR Stereo Aktif! Pasang ponsel ke headset VR.', '🥽');
+            } else {
+                btn.classList.remove('active');
+                reticle.style.display = 'none';
+                divider.style.display = 'none';
+                renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+                renderer.setScissorTest(false);
+                showToast('Kembali ke tampilan standar 3D', '🖥️');
+            }
+            playSoundClick();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {
+                    showToast('Mode layar penuh tidak didukung di bingkai ini', '⚠️');
+                });
+            } else {
+                document.exitFullscreen();
+            }
+            playSoundClick();
+        }
+
+        function toggleHelpModal() {
+            const modal = document.getElementById('help-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+            playSoundClick();
+        }
+
+        function toggleHudCollapse() {
+            hudCollapsed = !hudCollapsed;
+            const body = document.getElementById('hud-body');
+            const tabs = document.getElementById('hud-tabs');
+            const icon = document.getElementById('collapse-icon');
+            body.style.display = hudCollapsed ? 'none' : 'block';
+            tabs.style.display = hudCollapsed ? 'none' : 'flex';
+            icon.textContent = hudCollapsed ? '+' : '−';
+            playSoundClick();
+        }
+
+        function switchSubTab(tab) {
+            currentSubTab = tab;
+            ['sim', 'code', 'quiz'].forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if (t === tab) {
+                    el.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/25 text-cyan-200 border border-cyan-400/40';
+                } else {
+                    el.className = 'flex-1 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800/60';
+                }
+            });
+            playSoundClick();
+            updateHudContent();
+        }
+
+        // --- 7. KONTEN INTERAKTIF HUD (SIMULASI, KODE PYTHON/C++, KUIS) ---
+        function updateHudContent() {
+            const badge = document.getElementById('hud-badge');
+            const title = document.getElementById('hud-title');
+            const body = document.getElementById('hud-body');
+
+            const moduleMeta = [
+                { badge: 'LOBBY UTAMA', title: 'Eksplorasi Cyber Lab 3D' },
+                { badge: 'MODUL 01 • DASAR', title: 'Variabel & Tipe Data' },
+                { badge: 'MODUL 02 • LOGIKA', title: 'Percabangan (If-Else)' },
+                { badge: 'MODUL 03 • KONTROL', title: 'Perulangan (For / While)' },
+                { badge: 'MODUL 04 • STRUKTUR DATA', title: 'Array & Algoritma Sorting' }
+            ];
+
+            badge.textContent = moduleMeta[currentStation].badge;
+            title.textContent = moduleMeta[currentStation].title;
+
+            if (currentStation === 0) {
+                body.innerHTML = `
+                    <p class="text-slate-200">Selamat datang di <b>AlgoVR Cyber Lab</b>, ruang simulasi 3D interaktif untuk memvisualisasikan konsep inti mata kuliah <b>Algoritma & Pemrograman</b>.</p>
+                    <div class="p-3 rounded-xl bg-cyan-950/50 border border-cyan-500/30 space-y-1.5">
+                        <div class="font-bold text-cyan-300 text-xs">🎯 Peta Stasiun Pembelajaran:</div>
+                        <ul class="text-xs text-slate-300 space-y-1 list-disc pl-4">
+                            <li><b>Stasiun 1:</b> Kotak memori 3D untuk Integer, String & Boolean.</li>
+                            <li><b>Stasiun 2:</b> Gerbang logika bercabang hijau/merah.</li>
+                            <li><b>Stasiun 3:</b> Lintasan energi konveyor perulangan.</li>
+                            <li><b>Stasiun 4:</b> Visualisasi pilar 3D Bubble & Selection Sort.</li>
+                        </ul>
+                    </div>
+                    <button onclick="teleportToStation(1)" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 font-bold text-white text-xs shadow-lg shadow-cyan-500/25">
+                        Mulai dari Modul 1: Variabel →
+                    </button>
+                `;
+                return;
+            }
+
+            if (currentSubTab === 'sim') {
+                renderSimulationTab(body);
+            } else if (currentSubTab === 'code') {
+                renderCodeTab(body);
+            } else {
+                renderQuizTab(body);
+            }
+        }
+
+        function renderSimulationTab(body) {
+            if (currentStation === 1) {
+                body.innerHTML = `
+                    <p class="text-slate-300 text-xs"><b>Variabel</b> adalah wadah bernama di memori komputer untuk menyimpan nilai sesuai <b>Tipe Data</b>-nya.</p>
+                    <div class="space-y-2.5 pt-1">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-cyan-300 mb-1">Nama Variabel (Identifier)</label>
+                            <input type="text" value="${varState.name}" oninput="varState.name = this.value || 'data'; updateStation1Visual();"
+                                class="w-full px-3 py-1.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 text-white font-mono-code text-xs focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-cyan-300 mb-1">Pilih Tipe Data</label>
+                            <div class="grid grid-cols-3 gap-1.5">
+                                <button onclick="changeVarType('int')" class="py-1.5 rounded-lg text-xs font-mono-code font-bold border ${varState.type === 'int' ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200' : 'bg-slate-900/70 border-slate-700 text-slate-400'}">int</button>
+                                <button onclick="changeVarType('str')" class="py-1.5 rounded-lg text-xs font-mono-code font-bold border ${varState.type === 'str' ? 'bg-amber-500/30 border-amber-400 text-amber-200' : 'bg-slate-900/70 border-slate-700 text-slate-400'}">string</button>
+                                <button onclick="changeVarType('bool')" class="py-1.5 rounded-lg text-xs font-mono-code font-bold border ${varState.type === 'bool' ? 'bg-emerald-500/30 border-emerald-400 text-emerald-200' : 'bg-slate-900/70 border-slate-700 text-slate-400'}">bool</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-cyan-300 mb-1">Nilai (Value)</label>
+                            ${varState.type === 'bool' ? `
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button onclick="varState.value='true'; updateStation1Visual(); playSoundSuccess();" class="py-1.5 rounded-lg bg-emerald-600/30 border border-emerald-400 text-emerald-200 font-mono-code text-xs font-bold">true (1)</button>
+                                    <button onclick="varState.value='false'; updateStation1Visual(); playSoundError();" class="py-1.5 rounded-lg bg-rose-600/30 border border-rose-400 text-rose-200 font-mono-code text-xs font-bold">false (0)</button>
+                                </div>
+                            ` : `
+                                <input type="${varState.type === 'int' ? 'number' : 'text'}" value="${varState.value}"
+                                    oninput="varState.value = this.value; updateStation1Visual();"
+                                    class="w-full px-3 py-1.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 text-white font-mono-code text-xs focus:outline-none">
+                            `}
+                        </div>
+                    </div>
+                `;
+            } else if (currentStation === 2) {
+                const passed = branchState.nilai >= branchState.kkm;
+                body.innerHTML = `
+                    <p class="text-slate-300 text-xs">Struktur <b>If-Else</b> mengevaluasi kondisi boolean untuk menentukan cabang jalur eksekusi program.</p>
+                    <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700 space-y-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-cyan-300 font-semibold">Input Nilai Mahasiswa:</span>
+                            <span class="font-mono-code font-bold text-white">${branchState.nilai}</span>
+                        </div>
+                        <input type="range" min="0" max="100" value="${branchState.nilai}"
+                            oninput="branchState.nilai = parseInt(this.value); updateStation2Visual(); updateHudContent();"
+                            class="w-full accent-cyan-400 cursor-pointer">
+                        <div class="flex justify-between text-[11px] text-slate-400">
+                            <span>0</span>
+                            <span>Batas KKM: ${branchState.kkm}</span>
+                            <span>100</span>
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-xl border ${passed ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-200' : 'bg-rose-950/50 border-rose-500/50 text-rose-200'} text-xs font-mono-code">
+                        Kondisi: (${branchState.nilai} >= ${branchState.kkm}) → <b>${passed ? 'TRUE' : 'FALSE'}</b><br>
+                        Hasil: ${passed ? 'Gerbang Hijau Terbuka (LULUS)' : 'Gerbang Merah Terbuka (REMEDIAL)'}
+                    </div>
+                `;
+            } else if (currentStation === 3) {
+                body.innerHTML = `
+                    <p class="text-slate-300 text-xs"><b>Perulangan (Looping)</b> mengeksekusi blok instruksi berulang kali selama kondisi perulangan masih bernilai benar.</p>
+                    <div class="space-y-2.5">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-amber-300 font-semibold">Jumlah Iterasi (N):</span>
+                            <span class="font-mono-code font-bold text-white">${loopState.count} kali</span>
+                        </div>
+                        <input type="range" min="2" max="10" value="${loopState.count}"
+                            oninput="if(!loopState.running){ loopState.count = parseInt(this.value); loopState.currentIter = 0; rebuildLoopBlocks(); updateHudContent(); }"
+                            class="w-full accent-amber-400 cursor-pointer">
+                        <button onclick="runLoopSimulation()" ${loopState.running ? 'disabled' : ''}
+                            class="w-full py-2.5 rounded-xl font-bold text-xs text-slate-950 bg-gradient-to-r from-amber-400 to-orange-500 hover:brightness-110 disabled:opacity-50">
+                            ${loopState.running ? '⏳ Sedang Berjalan...' : '▶️ Jalankan Perulangan 3D'}
+                        </button>
+                        <div id="loop-live-status" class="text-[11px] font-mono-code text-cyan-300 text-center">
+                            Status: ${loopState.currentIter > 0 ? `Selesai ${loopState.currentIter} iterasi` : 'Menunggu eksekusi'}
+                        </div>
+                    </div>
+                `;
+            } else if (currentStation === 4) {
+                body.innerHTML = `
+                    <p class="text-slate-300 text-xs"><b>Array</b> menyimpan kumpulan elemen sejenis berindeks. Amati pertukaran pilar 3D saat diurutkan!</p>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="sortState.algo='bubble'; resetSortArray(false);" class="py-1.5 rounded-lg text-xs font-semibold border ${sortState.algo === 'bubble' ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200' : 'bg-slate-900/70 border-slate-700 text-slate-400'}">Bubble Sort</button>
+                        <button onclick="sortState.algo='selection'; resetSortArray(false);" class="py-1.5 rounded-lg text-xs font-semibold border ${sortState.algo === 'selection' ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200' : 'bg-slate-900/70 border-slate-700 text-slate-400'}">Selection Sort</button>
+                    </div>
+                    <div class="p-2 rounded-lg bg-slate-950/80 border border-slate-700 font-mono-code text-xs text-center text-cyan-300" id="sort-array-text">
+                        [ ${sortState.array.join(', ')} ]
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <button onclick="toggleAutoSort()" class="py-2 rounded-xl font-bold text-xs text-white ${sortState.isSorting ? 'bg-rose-600' : 'bg-emerald-600'}">
+                            ${sortState.isSorting ? '⏸ Pause' : '▶️ Play'}
+                        </button>
+                        <button onclick="stepSortAlgorithm()" class="py-2 rounded-xl font-bold text-xs bg-sky-600 text-white">⏭ Step</button>
+                        <button onclick="resetSortArray(true)" class="py-2 rounded-xl font-bold text-xs bg-slate-700 text-slate-200">🎲 Acak</button>
+                    </div>
+                `;
+            }
+        }
+
+        function changeVarType(type) {
+            varState.type = type;
+            if (type === 'int') varState.value = '100';
+            if (type === 'str') varState.value = 'AlgoVR';
+            if (type === 'bool') varState.value = 'true';
+            playSoundClick();
+            updateStation1Visual();
+            updateHudContent();
+        }
+
+        function renderCodeTab(body) {
+            const codes = {
+                1: {
+                    py: `# Python (Dynamic Typing)\n${varState.name} = ${varState.type === 'str' ? `"${varState.value}"` : (varState.type === 'bool' ? (varState.value === 'true' ? 'True' : 'False') : varState.value)}\nprint(type(${varState.name}))`,
+                    cpp: `// C++ (Static Typing)\n${varState.type === 'str' ? 'string' : varState.type} ${varState.name} = ${varState.type === 'str' ? `"${varState.value}"` : varState.value};\ncout << ${varState.name} << endl;`
+                },
+                2: {
+                    py: `# Percabangan Python\nnilai = ${branchState.nilai}\nif nilai >= ${branchState.kkm}:\n    print("LULUS UJIAN")\nelse:\n    print("REMEDIAL")`,
+                    cpp: `// Percabangan C++\nint nilai = ${branchState.nilai};\nif (nilai >= ${branchState.kkm}) {\n    cout << "LULUS UJIAN";\n} else {\n    cout << "REMEDIAL";\n}`
+                },
+                3: {
+                    py: `# Perulangan For Python\nfor i in range(1, ${loopState.count + 1}):\n    print(f"Iterasi ke-{i}")`,
+                    cpp: `// Perulangan For C++\nfor (int i = 1; i <= ${loopState.count}; i++) {\n    cout << "Iterasi ke-" << i << endl;\n}`
+                },
+                4: {
+                    py: `# Bubble Sort Python\narr = [${sortState.array.join(', ')}]\nn = len(arr)\nfor i in range(n - 1):\n    for j in range(n - i - 1):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]`,
+                    cpp: `// Bubble Sort C++\nfor (int i = 0; i < n - 1; i++) {\n  for (int j = 0; j < n - i - 1; j++) {\n    if (arr[j] > arr[j + 1])\n      swap(arr[j], arr[j + 1]);\n  }\n}`
+                }
+            };
+
+            const c = codes[currentStation];
+            body.innerHTML = `
+                <div class="space-y-2.5">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase text-amber-300">🐍 Implementasi Python</span>
+                        <pre class="mt-1 p-2.5 rounded-xl bg-slate-950/90 border border-slate-700/80 font-mono-code text-[11px] text-emerald-300 overflow-x-auto">${c.py}</pre>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-bold uppercase text-sky-300">⚙️ Implementasi C++</span>
+                        <pre class="mt-1 p-2.5 rounded-xl bg-slate-950/90 border border-slate-700/80 font-mono-code text-[11px] text-cyan-300 overflow-x-auto">${c.cpp}</pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderQuizTab(body) {
+            const quizzes = {
+                1: {
+                    q: 'Tipe data manakah yang paling tepat untuk menyimpan status kelulusan (True / False)?',
+                    opts: ['Integer (int)', 'Boolean (bool)', 'String (str)'],
+                    ans: 1
+                },
+                2: {
+                    q: 'Jika nilai = 70 dan kondisi adalah if (nilai >= 75), blok kode manakah yang dijalankan?',
+                    opts: ['Blok IF (True)', 'Blok ELSE (False)', 'Keduanya dijalankan'],
+                    ans: 1
+                },
+                3: {
+                    q: 'Berapa kali perulangan for (int i = 0; i < 5; i++) akan mengeksekusi blok di dalamnya?',
+                    opts: ['4 kali', '5 kali', '6 kali'],
+                    ans: 1
+                },
+                4: {
+                    q: 'Indeks elemen pertama pada struktur data Array di bahasa C++ dan Python dimulai dari angka...',
+                    opts: ['0', '1', '-1'],
+                    ans: 0
+                }
+            };
+
+            const item = quizzes[currentStation];
+            const userPick = quizAnswers[currentStation];
+
+            body.innerHTML = `
+                <div class="space-y-2.5">
+                    <div class="text-xs font-semibold text-cyan-200">Evaluasi Pemahaman Modul ${currentStation}:</div>
+                    <p class="text-xs text-slate-200 bg-slate-900/70 p-2.5 rounded-xl border border-slate-700">${item.q}</p>
+                    <div class="space-y-1.5">
+                        ${item.opts.map((opt, i) => {
+                            let cls = 'bg-slate-900/80 border-slate-700 text-slate-200 hover:border-cyan-400';
+                            if (userPick !== undefined) {
+                                if (i === item.ans) cls = 'bg-emerald-900/60 border-emerald-400 text-emerald-200 font-bold';
+                                else if (i === userPick) cls = 'bg-rose-900/60 border-rose-400 text-rose-200';
+                            }
+                            return `<button onclick="submitQuiz(${i}, ${item.ans})" class="w-full text-left px-3 py-2 rounded-xl border text-xs transition ${cls}">${opt}</button>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function submitQuiz(picked, correct) {
+            quizAnswers[currentStation] = picked;
+            if (picked === correct) {
+                playSoundSuccess();
+                showToast('Jawaban Benar! Pemahaman Anda sangat baik.', '🏆');
+            } else {
+                playSoundError();
+                showToast('Kurang tepat, coba perhatikan warna hijau!', '💡');
+            }
+            updateHudContent();
+        }
+
+        // --- 8. LOOP ANIMASI UTAMA THREE.JS ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            // Gerakan berjalan WASD / D-Pad
+            const walkSpeed = 6.5 * dt;
+            const forward = new THREE.Vector3(-Math.sin(camControl.yaw), 0, -Math.cos(camControl.yaw));
+            const right = new THREE.Vector3(Math.cos(camControl.yaw), 0, -Math.sin(camControl.yaw));
+
+            if (camControl.move.forward) camControl.targetPos.addScaledVector(forward, walkSpeed);
+            if (camControl.move.backward) camControl.targetPos.addScaledVector(forward, -walkSpeed);
+            if (camControl.move.right) camControl.targetPos.addScaledVector(right, walkSpeed);
+            if (camControl.move.left) camControl.targetPos.addScaledVector(right, -walkSpeed);
+
+            // Batasi area berjalan agar tetap di dalam Cyber Lab
+            camControl.targetPos.x = THREE.MathUtils.clamp(camControl.targetPos.x, -19, 19);
+            camControl.targetPos.z = THREE.MathUtils.clamp(camControl.targetPos.z, -21, 14);
+
+            // Interpolasi halus kamera
+            camControl.pos.lerp(camControl.targetPos, 0.1);
+            camControl.yaw += (camControl.targetYaw - camControl.yaw) * 0.12;
+            camControl.pitch += (camControl.targetPitch - camControl.pitch) * 0.12;
+
+            camera.position.copy(camControl.pos);
+            const euler = new THREE.Euler(camControl.pitch, camControl.yaw, 0, 'YXZ');
+            camera.quaternion.setFromEuler(euler);
+
+            // Animasi Objek 3D di setiap stasiun
+            if (particlesMesh) {
+                particlesMesh.rotation.y = elapsed * 0.03;
+            }
+            if (objects3D.lobbyHolo) {
+                objects3D.lobbyHolo.ico.rotation.y = elapsed * 0.4;
+                objects3D.lobbyHolo.ico.rotation.x = elapsed * 0.2;
+                objects3D.lobbyHolo.core.rotation.y = -elapsed * 0.8;
+                objects3D.lobbyHolo.group.position.y = 1.8 + Math.sin(elapsed * 2) * 0.12;
+            }
+            if (objects3D.varInnerCore) {
+                objects3D.varInnerCore.rotation.y = elapsed * 1.1;
+                objects3D.varInnerCore.rotation.x = elapsed * 0.6;
+                objects3D.varInnerCore.position.y = 2.0 + Math.sin(elapsed * 2.5) * 0.15;
+            }
+            if (objects3D.branchOrb && objects3D.branchOrb.userData.targetZ !== undefined) {
+                objects3D.branchOrb.position.z += (objects3D.branchOrb.userData.targetZ - objects3D.branchOrb.position.z) * 0.1;
+                objects3D.branchOrb.position.y = 1.8 + Math.sin(elapsed * 3) * 0.1;
+            }
+
+            // Render Standar atau Stereoscopic Split-Screen VR
+            if (!isVRMode) {
+                renderer.render(scene, camera);
+            } else {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                const halfW = w / 2;
+                const eyeOffset = 0.035;
+
+                renderer.setScissorTest(true);
+
+                // Mata Kiri
+                renderer.setViewport(0, 0, halfW, h);
+                renderer.setScissor(0, 0, halfW, h);
+                camera.aspect = halfW / h;
+                camera.updateProjectionMatrix();
+                camera.translateX(-eyeOffset);
+                renderer.render(scene, camera);
+                camera.translateX(eyeOffset);
+
+                // Mata Kanan
+                renderer.setViewport(halfW, 0, halfW, h);
+                renderer.setScissor(halfW, 0, halfW, h);
+                camera.translateX(eyeOffset);
+                renderer.render(scene, camera);
+                camera.translateX(-eyeOffset);
+            }
+        }
+
+        // Jalankan aplikasi setelah seluruh aset & DOM dimuat
+        window.onload = function () {
+            initThreeScene();
+            animate();
+        };
+    </script>
+</body>
+</html>
